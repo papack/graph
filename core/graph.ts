@@ -1,10 +1,18 @@
 type Primitive = string | number | boolean | bigint | symbol | null | undefined;
 
 type AnyObj = Record<PropertyKey, any>;
+
 type AnyFn = (...args: any[]) => any;
 
+/**
+ * IMPORTANT:
+ * String-id writes are intentionally untyped.
+ *
+ * Reads stay strongly typed.
+ * Writes are fully dynamic.
+ */
 type GraphArray<U, Key extends string> = Omit<U[], keyof any[]> & {
-  [id: string]: GraphObject<U, Key>;
+  [id: string]: any;
 } & Array<GraphObject<U, Key>>;
 
 type GraphObject<T, Key extends string> = {
@@ -62,18 +70,8 @@ export function graph<T extends object[], Key extends string>(
       const proxy = new Proxy(value, {
         get(arr, prop, receiver): any {
           /**
-           * IMPORTANT:
-           * Explicit `any` return type.
-           *
-           * This preserves deep dynamic access:
-           *
-           * g["u1"].posts["p1"].comments["c1"]
-           *
-           * without TypeScript collapsing
-           * recursive array intersections.
+           * Native array behavior
            */
-
-          // native array behavior
           if (
             typeof prop !== "string" ||
             prop in arr ||
@@ -89,6 +87,9 @@ export function graph<T extends object[], Key extends string>(
             return wrap(native);
           }
 
+          /**
+           * Entity lookup by id
+           */
           const found = arr.find((item) => String(item[key]) === prop);
 
           if (!found) {
@@ -98,29 +99,41 @@ export function graph<T extends object[], Key extends string>(
           return wrap(found);
         },
 
-        set(arr, prop, value) {
-          // native array index
+        /**
+         * IMPORTANT:
+         * Writes are intentionally untyped.
+         */
+        set(arr, prop, value: any) {
+          /**
+           * Native array index
+           */
           if (typeof prop !== "string" || /^\d+$/.test(prop)) {
             return Reflect.set(arr, prop, value);
           }
 
           const index = arr.findIndex((item) => String(item[key]) === prop);
 
-          // replace existing
+          /**
+           * Replace existing
+           */
           if (index !== -1) {
             arr[index] = value;
 
             return true;
           }
 
-          // add new
+          /**
+           * Add new
+           */
           if (isPlainObject(value) && String(value[key]) === prop) {
             arr.push(value);
 
             return true;
           }
 
-          // ignore invalid writes
+          /**
+           * Ignore invalid writes
+           */
           return true;
         },
 

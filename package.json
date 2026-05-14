@@ -2,7 +2,7 @@
   "name": "@papack/graph",
   "description": "Edit array of obj as graph",
   "author": "Matthias Steiner",
-  "version": "1.0.2",
+  "version": "1.0.3",
   "repository": "github:papack/graph",
   "homepage": "https://github.com/papack/graph",
   "publishConfig": {
