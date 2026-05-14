@@ -1,0 +1,31 @@
+{
+  "name": "@papack/graph",
+  "description": "Edit array of obj as graph",
+  "author": "Matthias Steiner",
+  "repository": "github:papack/graph",
+  "homepage": "https://github.com/papack/graph",
+  "publishConfig": {
+    "access": "public"
+  },
+  "module": "dist/index.mjs",
+  "main": "./dist/index.cjs",
+  "version": "1.0.0",
+  "types": "./dist/index.d.mts",
+  "license": "MIT",
+  "type": "module",
+  "private":false,
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsdown"
+  },
+  "devDependencies": {
+    "@types/bun": "latest",
+    "tsdown": "^0.16.8"
+  },
+  "peerDependencies": {
+    "typescript": "^5"
+  }
+}
+
