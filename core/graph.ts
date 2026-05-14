@@ -1,6 +1,7 @@
 type Primitive = string | number | boolean | bigint | symbol | null | undefined;
 
 type AnyObj = Record<PropertyKey, any>;
+type AnyFn = (...args: any[]) => any;
 
 type GraphArray<U, Key extends string> = Omit<U[], keyof any[]> & {
   [id: string]: GraphObject<U, Key>;
@@ -10,10 +11,14 @@ type GraphObject<T, Key extends string> = {
   [P in keyof T]: Graphify<T[P], Key>;
 };
 
+type IsNever<T> = [T] extends [never] ? true : false;
+
 export type Graphify<T, Key extends string> = T extends Primitive
   ? T
   : T extends Array<infer U>
-    ? GraphArray<U, Key>
+    ? IsNever<U> extends true
+      ? GraphArray<any, Key>
+      : GraphArray<U, Key>
     : T extends object
       ? GraphObject<T, Key>
       : T;
@@ -50,10 +55,24 @@ export function graph<T extends object[], Key extends string>(
       return cached;
     }
 
-    // ENTITY ARRAY
+    /**
+     * ENTITY ARRAY
+     */
     if (isEntityArray(value)) {
       const proxy = new Proxy(value, {
-        get(arr, prop, receiver) {
+        get(arr, prop, receiver): any {
+          /**
+           * IMPORTANT:
+           * Explicit `any` return type.
+           *
+           * This preserves deep dynamic access:
+           *
+           * g["u1"].posts["p1"].comments["c1"]
+           *
+           * without TypeScript collapsing
+           * recursive array intersections.
+           */
+
           // native array behavior
           if (
             typeof prop !== "string" ||
@@ -63,9 +82,11 @@ export function graph<T extends object[], Key extends string>(
           ) {
             const native = Reflect.get(arr, prop, receiver);
 
-            return typeof native === "function"
-              ? native.bind(arr)
-              : wrap(native);
+            if (typeof native === "function") {
+              return (native as AnyFn).bind(arr);
+            }
+
+            return wrap(native);
           }
 
           const found = arr.find((item) => String(item[key]) === prop);
@@ -125,7 +146,9 @@ export function graph<T extends object[], Key extends string>(
       return proxy;
     }
 
-    // NORMAL OBJECT
+    /**
+     * NORMAL OBJECT
+     */
     const proxy = new Proxy(value, {
       get(obj, prop, receiver) {
         return wrap(Reflect.get(obj, prop, receiver));

@@ -129,7 +129,6 @@ describe("graph", () => {
     const g = graph(users, "uuid");
 
     expect(() => {
-      //@ts-expect-error
       g["asdf"]!.posts["asdf"]!.comments["asdf"]!.text = "asdf";
     }).toThrow('Entity "asdf" not found');
   });
@@ -197,5 +196,59 @@ describe("graph", () => {
     expect(users).toHaveLength(1);
 
     expect(() => g["u2"]).toThrow('Entity "u2" not found');
+  });
+
+  test("supports deep nested typed access", () => {
+    const users = [
+      {
+        uuid: "u1",
+
+        posts: [
+          {
+            uuid: "p1",
+
+            comments: [
+              {
+                uuid: "c1",
+
+                author: [
+                  {
+                    uuid: "a1",
+                    name: "Max",
+                  },
+                ],
+              },
+            ],
+          },
+        ],
+      },
+    ];
+
+    const g = graph(users, "uuid");
+
+    expect(g["u1"]!.posts["p1"]!.comments["c1"]!.author["a1"]!.name).toBe(
+      "Max",
+    );
+
+    g["u1"]!.posts["p1"]!.comments["c1"]!.author["a1"]!.name = "Tom";
+
+    expect(users[0]!.posts[0]!.comments[0]!.author[0]!.name).toBe("Tom");
+  });
+
+  test("supports assigning nested entities", () => {
+    const users = [
+      {
+        uuid: "u1",
+        categories: [],
+      },
+    ];
+
+    const g = graph(users, "uuid");
+
+    g["u1"]!.categories["c1"] = {
+      uuid: "c1",
+    };
+
+    expect(g["u1"]!.categories["c1"]!.uuid).toBe("c1");
   });
 });
