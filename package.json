@@ -2,7 +2,7 @@
   "name": "@papack/idx",
   "description": "Mutate an array of objects with an index",
   "author": "Matthias Steiner",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "repository": "github:papack/idx",
   "homepage": "https://github.com/papack/idx",
   "publishConfig": {

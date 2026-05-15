@@ -1,138 +1,69 @@
 type Path = Array<string | number>;
-type AnyObject = Record<string, any>;
-type EntityKey = string;
+
 type Updater<T> = (value: T) => T;
-type GetResult<T, K extends keyof T> = Cursor<T[K]>;
-type IndexMap = Map<string, Path>;
 
-const DEFAULT_KEYS = ["id", "uuid"];
-
-function isObject(value: unknown): value is AnyObject {
+function isObject(value: unknown): value is Record<string, any> {
   return typeof value === "object" && value !== null;
 }
 
-function isEntity(value: unknown, keys: readonly string[]): value is AnyObject {
-  if (!isObject(value)) return false;
-
-  return keys.some((key) => typeof value[key] === "string");
+function getAtPath(root: any, path: Path) {
+  return path.reduce((current, key) => current[key], root);
 }
 
-function getEntityId(
-  value: AnyObject,
-  keys: readonly string[],
-): string | undefined {
-  for (const key of keys) {
-    const id = value[key];
+function findPath(
+  value: any,
+  uuid: string,
+  path: Path = [],
+  visited = new WeakSet<object>(),
+): Path | undefined {
+  if (!isObject(value)) return;
 
-    if (typeof id === "string") {
-      return id;
-    }
+  if (visited.has(value)) return;
+  visited.add(value);
+
+  if (value.uuid === uuid) {
+    return path;
   }
 
-  return undefined;
-}
+  if (Array.isArray(value)) {
+    for (const [i, item] of value.entries()) {
+      const result = findPath(item, uuid, [...path, i], visited);
 
-function getAtPath(root: any, path: Path): any {
-  let current = root;
-
-  for (const segment of path) {
-    current = current[segment];
-  }
-
-  return current;
-}
-
-function setAtPath(root: any, path: Path, value: any): void {
-  if (path.length === 0) {
-    throw new Error("Cannot replace root");
-  }
-
-  const parent = getAtPath(root, path.slice(0, -1));
-  const key = path[path.length - 1]!;
-
-  parent[key] = value;
-}
-
-function buildIndex(root: any, entityKeys: readonly string[]): IndexMap {
-  const index = new Map<string, Path>();
-  const visited = new WeakSet<object>();
-
-  function walk(value: any, path: Path): void {
-    if (!isObject(value)) return;
-
-    if (visited.has(value)) return;
-    visited.add(value);
-
-    if (isEntity(value, entityKeys)) {
-      const id = getEntityId(value, entityKeys);
-
-      if (id) {
-        index.set(id, [...path]);
-      }
+      if (result) return result;
     }
 
-    if (Array.isArray(value)) {
-      value.forEach((item, i) => {
-        walk(item, [...path, i]);
-      });
-
-      return;
-    }
-
-    for (const key of Object.keys(value)) {
-      walk(value[key], [...path, key]);
-    }
+    return;
   }
 
-  walk(root, []);
+  for (const key in value) {
+    const result = findPath(value[key], uuid, [...path, key], visited);
 
-  return index;
+    if (result) return result;
+  }
 }
 
 class Cursor<T> {
   constructor(
-    private readonly rootRef: { current: any },
-    private readonly path: Path,
-    private readonly entityKeys: readonly string[],
+    private root: { current: any },
+    private path: Path,
   ) {}
 
-  private reindex(): IndexMap {
-    return buildIndex(this.rootRef.current, this.entityKeys);
-  }
-
   value(): T {
-    return getAtPath(this.rootRef.current, this.path);
+    return getAtPath(this.root.current, this.path);
   }
 
-  get<K extends keyof T>(key: K): GetResult<T, K>;
+  get<TKey extends keyof T>(key: TKey): Cursor<T[TKey]> {
+    return new Cursor(this.root, [...this.path, key as string]);
+  }
 
-  get(id: string): Cursor<any>;
+  find<TFound = any>(uuid: string): Cursor<TFound> {
+    const path = findPath(this.value(), uuid);
 
-  get(key: any): Cursor<any> {
-    const current = this.value();
-
-    // direct property access
-    if (
-      isObject(current) &&
-      (typeof key === "string" || typeof key === "number") &&
-      key in current
-    ) {
-      return new Cursor(this.rootRef, [...this.path, key], this.entityKeys);
+    if (!path) {
+      throw new Error(`Missing entity: ${uuid}`);
     }
 
-    // indexed entity lookup
-    if (typeof key === "string") {
-      const index = this.reindex();
-      const path = index.get(key);
-
-      if (!path) {
-        throw new Error(`Missing entity: ${key}`);
-      }
-
-      return new Cursor(this.rootRef, path, this.entityKeys);
-    }
-
-    throw new Error(`Invalid key: ${String(key)}`);
+    return new Cursor<TFound>(this.root, [...this.path, ...path]);
   }
 
   set(updater: Updater<T>): this {
@@ -140,20 +71,18 @@ class Cursor<T> {
     const next = updater(current);
 
     if (this.path.length === 0) {
-      this.rootRef.current = next;
+      this.root.current = next;
       return this;
     }
 
-    if (next !== current) {
-      setAtPath(this.rootRef.current, this.path, next);
-    }
+    const parent = getAtPath(this.root.current, this.path.slice(0, -1));
+
+    parent[this.path[this.path.length - 1]!] = next;
 
     return this;
   }
 }
 
-export function idx<T>(value: T, key?: EntityKey | EntityKey[]): Cursor<T> {
-  const entityKeys = Array.isArray(key) ? key : key ? [key] : DEFAULT_KEYS;
-
-  return new Cursor({ current: value }, [], entityKeys);
+export function idx<T>(value: T) {
+  return new Cursor<T>({ current: value }, []);
 }

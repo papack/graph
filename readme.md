@@ -1,7 +1,8 @@
 # @papack/idx
 
-Typed index traversal for deeply nested objects and arrays.  
-Objects containing an ID key (`"id"`, `"uuid"`, etc.) become globally addressable.
+Typed traversal and UUID lookup for deeply nested objects and arrays.
+
+Every object containing a `uuid` field becomes recursively searchable.
 
 ## Installation
 
@@ -31,10 +32,9 @@ const document = {
   ],
 };
 
-const doc = idx(document, "uuid");
-
-doc
-  .get("hero-1")
+idx(document)
+  .get("sections")
+  .find("hero-1")
   .get("content")
   .get("title")
   .set((title) => {
@@ -50,16 +50,30 @@ console.log(document.sections[0].content.title.value);
 
 ## Access
 
-```typescript
-doc.get("hero-1");
+### Typed property traversal
 
-doc.get("hero-1").get("content").get("title");
+`.get()` preserves autocomplete and type inference.
+
+```typescript
+idx(document).get("sections").get(0).get("content").get("title");
 ```
 
-### Reading values
+### Recursive UUID lookup
+
+`.find()` searches recursively from the current cursor.
 
 ```typescript
-const title = doc.get("title-1").value();
+idx(document).get("sections").find("hero-1");
+```
+
+```typescript
+idx(document).get("sections").find("hero-1").get("content").get("title");
+```
+
+## Reading values
+
+```typescript
+const title = idx(document).get("sections").find("title-1").value();
 
 title.value;
 ```
@@ -68,49 +82,57 @@ title.value;
 
 ## Updating values
 
-### Update values
+### Mutate values
 
 ```typescript
-doc.get("title-1").set((title) => {
-  title.value = "Updated";
+idx(document)
+  .get("sections")
+  .find("title-1")
+  .set((title) => {
+    title.value = "Updated";
 
-  return title;
-});
+    return title;
+  });
 ```
 
 ### Replace values
 
 ```typescript
-doc.get("title-1").set((title) => ({
-  ...title,
-  value: "Replaced",
-}));
+idx(document)
+  .get("sections")
+  .find("title-1")
+  .set((title) => ({
+    ...title,
+    value: "Replaced",
+  }));
 ```
 
 ### Replace arrays
 
 ```typescript
-doc
-  .get("gallery-1")
-  .get("images")
+idx(document)
+  .get("sections")
   .set(() => []);
 ```
 
 ### Filter arrays
 
 ```typescript
-doc
+idx(document)
   .get("sections")
   .set((sections) => sections.filter((section) => section.uuid !== "hero-1"));
 ```
 
 ## TypeScript
 
-Traversal preserves autocomplete and type inference.
+### Automatic typing
+
+`.get()` is automatically typed from the current cursor.
 
 ```typescript
-doc
-  .get("hero-1")
+idx(document)
+  .get("sections")
+  .get(0)
   .get("content")
   .get("title")
   .set((title) => {
@@ -121,14 +143,38 @@ doc
   });
 ```
 
+### Manual typing for `.find()`
+
+UUID lookup cannot be typed automatically because TypeScript cannot infer runtime UUID values.
+
+You can provide the expected type manually:
+
+```typescript
+interface Section {
+  uuid: string;
+
+  content: {
+    title: {
+      uuid: string;
+      value: string;
+    };
+  };
+}
+
+idx(document).find<Section>("hero-1").get("content").get("title");
+```
+
+Invalid keys then produce TypeScript errors:
+
+```typescript
+idx(document).find<Section>("hero-1").get("invalid");
+// TypeScript error
+```
+
 ## API
 
 ```typescript
-idx(value, key?)
-
-.get(key)
-.value()
-.set(updater)
+idx(value).get(key).find(uuid).value().set(updater);
 ```
 
 ## Behavior
@@ -136,8 +182,9 @@ idx(value, key?)
 - Objects are never cloned automatically
 - References are preserved unless replaced
 - Arrays remain arrays
-- Entities are indexed recursively
+- UUIDs are searched recursively
 - Cycles are supported
-- `.get()` always returns a cursor
+- `.get()` is typed local traversal
+- `.find()` performs recursive UUID lookup
 - `.value()` returns the raw value
-- Missing entities throw runtime errors
+- Missing UUIDs throw runtime errors
