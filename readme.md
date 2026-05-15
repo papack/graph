@@ -1,141 +1,143 @@
-# @papack/graph
+# @papack/idx
 
-Graph access for lists of objects.
-
-`graph()` creates a proxy view over nested arrays containing entities.
-
-Arrays are indexed by a key (`"id"`, `"uuid"`, `"_id"`, etc.) and become directly addressable.
+Typed index traversal for deeply nested objects and arrays.  
+Objects containing an ID key (`"id"`, `"uuid"`, etc.) become globally addressable.
 
 ## Installation
 
-```bash id="j8m2q4"
-npm install @papack/graph
+```bash
+npm install @papack/idx
 ```
 
-### Example
+## Example
 
-```ts
-import { graph } from "@papack/graph";
+```typescript
+import { idx } from "@papack/idx";
 
-const users = [
-  {
-    uuid: "u1",
-    name: "Max",
+const document = {
+  uuid: "root",
 
-    posts: [
-      {
-        uuid: "p1",
-        title: "Hello",
+  sections: [
+    {
+      uuid: "hero-1",
+
+      content: {
+        title: {
+          uuid: "title-1",
+          value: "Hello",
+        },
       },
-    ],
-  },
-];
-
-const g = graph(users, "uuid");
-
-g["u1"]!.name = "Tom";
-g["u1"]!.posts["p1"]!.title = "Updated";
-```
-
-All changes mutate the original arrays and objects.
-
-## Access:
-
-```ts
-g["u1"]!;
-```
-
-## Replacing entities
-
-```ts
-g["u1"] = {
-  uuid: "u1",
-  name: "Tom",
-  posts: [],
+    },
+  ],
 };
+
+const doc = idx(document, "uuid");
+
+doc
+  .get("hero-1")
+  .get("content")
+  .get("title")
+  .set((title) => {
+    title.value += " World";
+
+    return title;
+  });
+
+console.log(document.sections[0].content.title.value);
+
+// Hello World
 ```
 
-Replaces the original entity in the source array.
+## Access
 
-## Adding entities
+```typescript
+doc.get("hero-1");
 
-```ts
-g["u2"] = {
-  uuid: "u2",
-  name: "Anna",
-  posts: [],
-};
+doc.get("hero-1").get("content").get("title");
 ```
 
-Adds the entity to the original array.
+### Reading values
 
-## Deleting entities
+```typescript
+const title = doc.get("title-1").value();
 
-```ts
-delete g["u1"];
+title.value;
 ```
 
-Removes the entity from the original array.
+`.value()` returns the original reference.
 
-## Nested arrays
+## Updating values
 
-```ts
-g["u1"]!.posts["p1"]!.comments["c1"]!;
+### Update values
+
+```typescript
+doc.get("title-1").set((title) => {
+  title.value = "Updated";
+
+  return title;
+});
 ```
 
-Nested arrays are indexed recursively.
+### Replace values
 
-## Missing entities
-
-Accessing a missing entity throws an error.
-
-```ts
-g["missing"];
+```typescript
+doc.get("title-1").set((title) => ({
+  ...title,
+  value: "Replaced",
+}));
 ```
 
-```txt
-Error: Entity "missing" not found
+### Replace arrays
+
+```typescript
+doc
+  .get("gallery-1")
+  .get("images")
+  .set(() => []);
+```
+
+### Filter arrays
+
+```typescript
+doc
+  .get("sections")
+  .set((sections) => sections.filter((section) => section.uuid !== "hero-1"));
 ```
 
 ## TypeScript
 
-```ts
-g["u1"]!.posts["p1"]!.title;
+Traversal preserves autocomplete and type inference.
+
+```typescript
+doc
+  .get("hero-1")
+  .get("content")
+  .get("title")
+  .set((title) => {
+    title.value;
+    // string
+
+    return title;
+  });
 ```
-
-Nested properties preserve autocomplete and type inference.
-
-## Behavior
-
-- Arrays remain arrays internally
-- Access is virtual through `Proxy`
-- Objects are never copied
-- References are preserved
-- Arrays are indexed recursively
-- Mutations apply directly to the original objects
-- Missing entities throw runtime errors
 
 ## API
 
-```ts
-graph(value, key);
+```typescript
+idx(value, key?)
+
+.get(key)
+.value()
+.set(updater)
 ```
 
-### Parameters
+## Behavior
 
-| Name    | Type            | Description                  |
-| ------- | --------------- | ---------------------------- |
-| `value` | `Array<object>` | Root entity list             |
-| `key`   | `string`        | Entity key used for indexing |
-
-#### Example structure
-
-Input:
-
-```ts
-[
-  {
-    uuid: "u1",
-  },
-];
-```
+- Objects are never cloned automatically
+- References are preserved unless replaced
+- Arrays remain arrays
+- Entities are indexed recursively
+- Cycles are supported
+- `.get()` always returns a cursor
+- `.value()` returns the raw value
+- Missing entities throw runtime errors
